@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walkman MP3 Downloader</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2230; --line:#2a313c;
+    --text:#e6edf3; --dim:#8b949e; --accent:#ff6a00; --ok:#3fb950;
+    --warn:#d29922; --err:#f85149;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px 16px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.2px}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px;margin-bottom:16px}
+  label{display:block;font-size:12px;color:var(--dim);margin-bottom:5px;
+    text-transform:uppercase;letter-spacing:.5px}
+  input[type=text],input[type=number],select{width:100%;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;color:var(--text);
+    padding:10px 12px;font-size:14px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+  .mt{margin-top:14px}
+  .checks{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font-size:13px;color:var(--dim)}
+  .checks label{display:flex;align-items:center;gap:7px;text-transform:none;
+    letter-spacing:0;font-size:13px;margin:0;cursor:pointer}
+  button{background:var(--accent);color:#000;border:0;border-radius:8px;
+    padding:12px 22px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .adv{border:0;padding:0;margin:0}
+  summary{cursor:pointer;color:var(--dim);font-size:13px;margin-top:4px}
+  #bar{height:6px;background:var(--panel2);border-radius:99px;overflow:hidden;margin:14px 0 6px}
+  #fill{height:100%;width:0;background:var(--accent);transition:width .3s}
+  #stat{font-size:12px;color:var(--dim)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-size:11px;text-transform:uppercase;
+    letter-spacing:.5px;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:7px 8px;border-bottom:1px solid #20262f;vertical-align:top}
+  .pill{font-size:11px;padding:2px 7px;border-radius:99px;font-weight:600}
+  .s-ok{background:rgba(63,185,80,.15);color:var(--ok)}
+  .s-skipped{background:rgba(210,153,34,.15);color:var(--warn)}
+  .s-error{background:rgba(248,81,73,.15);color:var(--err)}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .over{color:var(--err);font-weight:600}
+  #log{background:#0a0d12;border:1px solid var(--line);border-radius:10px;
+    padding:12px;height:220px;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:#9fb0c3;white-space:pre-wrap}
+  .hint{font-size:12px;color:var(--dim);margin-top:10px;line-height:1.6}
+  .hint b{color:var(--text);font-weight:600}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Walkman <span>MP3</span> Downloader</h1>
+  <div class="sub">YouTube Music album or playlist &rarr; tagged MP3s with cover art, sized for a Sony Walkman E-series.</div>
+
+  <div class="card">
+    <label for="url">Album, playlist or video link</label>
+    <input id="url" type="text" placeholder="https://music.youtube.com/playlist?list=OLAK5uy_... &nbsp;or a bare list id" autocomplete="off">
+
+    <div class="row mt">
+      <div>
+        <label for="bitrate">Target bitrate</label>
+        <select id="bitrate">
+          <option value="320" selected>320 kbps</option>
+          <option value="256">256 kbps</option>
+          <option value="224">224 kbps</option>
+          <option value="192">192 kbps</option>
+        </select>
+      </div>
+      <div>
+        <label for="max_mb">Max size / song</label>
+        <select id="max_mb">
+          <option value="7">7 MB</option>
+          <option value="8">8 MB</option>
+          <option value="10" selected>10 MB</option>
+          <option value="12">12 MB</option>
+          <option value="999">no limit</option>
+        </select>
+      </div>
+      <div>
+        <label for="country">Metadata region</label>
+        <select id="country">
+          <option value="US" selected>US</option>
+          <option value="IN">India</option>
+          <option value="GB">UK</option>
+          <option value="AE">UAE</option>
+          <option value="JP">Japan</option>
+        </select>
+      </div>
+    </div>
+
+    <details class="adv mt">
+      <summary>More options</summary>
+      <div class="row mt">
+        <div>
+          <label for="out">Output folder</label>
+          <input id="out" type="text" value="{{ default_out }}">
+        </div>
+        <div>
+          <label for="art_px">Cover art px</label>
+          <input id="art_px" type="number" value="500" min="100" max="1000" step="50">
+        </div>
+        <div>
+          <label for="limit">Limit (0 = all)</label>
+          <input id="limit" type="number" value="0" min="0">
+        </div>
+        <div>
+          <label for="album_mode">Album mode</label>
+          <select id="album_mode">
+            <option value="auto" selected>Auto-detect</option>
+            <option value="always">Force (any playlist)</option>
+            <option value="never">Off (track by track)</option>
+          </select>
+        </div>
+        <div>
+          <label for="cookies">Cookies from browser</label>
+          <select id="cookies">
+            <option value="">none</option>
+            <option value="chrome">Chrome</option>
+            <option value="safari">Safari</option>
+            <option value="firefox">Firefox</option>
+            <option value="brave">Brave</option>
+            <option value="edge">Edge</option>
+          </select>
+        </div>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="folders" checked> Artist/Album subfolders</label>
+        <label><input type="checkbox" id="number_files" checked> Number filenames</label>
+        <label><input type="checkbox" id="overwrite"> Overwrite existing</label>
+      </div>
+    </details>
+
+    <div class="mt"><button id="go">Download</button></div>
+
+    <div id="bar" class="hidden"><div id="fill"></div></div>
+    <div id="stat"></div>
+
+    <div class="hint">
+      <b>Paste a YouTube Music album</b> (a <code>list=OLAK5uy_&hellip;</code> link) and every track gets
+      that release&rsquo;s real name, year, cover and track numbers in one lookup, in album order.
+      Ordinary playlists are tagged song by song.<br><br>
+      <b>320 kbps costs 2.4 MB per minute</b>, so a cap and &ldquo;always 320&rdquo; cannot both hold.
+      Each track gets the highest legal rate that fits: at the default 10 MB nearly every song up to
+      4 minutes stays at 320 kbps. Tighter caps step down the ladder
+      (256 &rarr; 224 &rarr; 192 &rarr; 160 &rarr; 128) until the file fits.
+    </div>
+  </div>
+
+  <div class="card hidden" id="resCard">
+    <table id="tbl">
+      <thead><tr>
+        <th>#</th><th>Track</th><th>Album</th><th class="num">kbps</th>
+        <th class="num">MB</th><th>Art</th><th>Tags</th><th>Status</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <label>Log</label>
+    <div id="log">idle.</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const logEl = $('log'), tbody = $('tbl').querySelector('tbody');
+let maxMb = 10, lastSeq = 0;
+
+function addLog(line){
+  if (logEl.textContent === 'idle.') logEl.textContent = '';
+  logEl.textContent += line + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function setProgress(done, total){
+  $('bar').classList.remove('hidden');
+  const pct = total ? Math.round(done / total * 100) : 0;
+  $('fill').style.width = pct + '%';
+  $('stat').textContent = total ? `${done} / ${total} tracks` : 'reading playlist…';
+}
+function esc(s){ return (s ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+
+function addRow(t){
+  $('resCard').classList.remove('hidden');
+  const tr = document.createElement('tr');
+  const over = t.size_mb > maxMb ? ' class="over"' : '';
+  tr.innerHTML = `
+    <td class="num">${t.index}</td>
+    <td>${esc(t.artist)}<br><span style="color:var(--dim)">${esc(t.title)}</span></td>
+    <td style="color:var(--dim)">${esc(t.album) || '—'}</td>
+    <td class="num">${t.bitrate || '—'}</td>
+    <td class="num"${over}>${t.size_mb || '—'}</td>
+    <td>${t.has_art ? '✓' : '—'}</td>
+    <td style="color:var(--dim)">${ {'itunes-album':'album','itunes':'matched'}[t.meta_source] || 'from YT' }</td>
+    <td><span class="pill s-${t.status}">${t.status}</span>${t.message ? '<br><span style="color:var(--dim);font-size:11px">' + esc(t.message) + '</span>' : ''}</td>`;
+  tbody.appendChild(tr);
+}
+
+const es = new EventSource('/api/stream');
+es.onmessage = e => {
+  const ev = JSON.parse(e.data);
+  if (ev.seq !== undefined){
+    if (ev.seq <= lastSeq) return;   // already rendered (stream replay)
+    lastSeq = ev.seq;
+  }
+  if (ev.kind === 'log'){ addLog(ev.msg); setProgress(ev.done, ev.total); }
+  else if (ev.kind === 'track'){ addRow(ev.track); setProgress(ev.done, ev.total); }
+  else if (ev.kind === 'done'){
+    addLog(`— ${ev.ok} downloaded, ${ev.skipped} skipped, ${ev.failed} failed · ${ev.total_mb} MB · ${ev.seconds}s`);
+    addLog(`saved to: ${ev.out_dir}`);
+    $('stat').textContent = `done — ${ev.ok} tracks, ${ev.total_mb} MB in ${ev.out_dir}`;
+    $('go').disabled = false; $('go').textContent = 'Download';
+  }
+  else if (ev.kind === 'fatal'){
+    addLog('FATAL: ' + ev.msg);
+    $('stat').textContent = 'failed';
+    $('go').disabled = false; $('go').textContent = 'Download';
+  }
+};
+
+$('go').onclick = async () => {
+  const url = $('url').value.trim();
+  if (!url){ $('url').focus(); return; }
+  maxMb = parseFloat($('max_mb').value);
+  tbody.innerHTML = ''; logEl.textContent = 'idle.'; lastSeq = 0;
+  $('go').disabled = true; $('go').textContent = 'Downloading…';
+  setProgress(0, 0);
+  const body = {
+    url,
+    out: $('out').value,
+    max_mb: maxMb,
+    bitrate: parseInt($('bitrate').value),
+    art_px: parseInt($('art_px').value),
+    country: $('country').value,
+    limit: parseInt($('limit').value) || 0,
+    cookies: $('cookies').value,
+    album_mode: $('album_mode').value,
+    folders: $('folders').checked,
+    number_files: $('number_files').checked,
+    overwrite: $('overwrite').checked
+  };
+  const r = await fetch('/api/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (!r.ok){
+    const j = await r.json().catch(() => ({error: 'request failed'}));
+    addLog('ERROR: ' + j.error);
+    $('go').disabled = false; $('go').textContent = 'Download';
+  }
+};
+$('url').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+</script>
+</body>
+</html>

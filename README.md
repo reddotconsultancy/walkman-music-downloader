@@ -1,155 +1,196 @@
-# Walkman MP3 Downloader
+# Walkman Music Downloader
 
-Paste a **YouTube Music album** or an ordinary **YouTube playlist**, get back
-MP3s that a **Sony Walkman E-series** indexes correctly: real artist/album/track
-tags, embedded cover art, and every file kept under a size cap you choose.
+**Get MP3s with the correct artist, album and track tags — and album art sized
+for the screen.** Built for the Sony Walkman E-series, useful for any hardware
+MP3 player that sorts your library by ID3 tags.
 
-![UI](ui.png)
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+
+<p align="center">
+  <img src="docs/screenshot.jpg" alt="Walkman Music Downloader web interface" width="700">
+</p>
+
+---
+
+## The problem this solves
+
+Most YouTube-to-MP3 tools hand you the video title and nothing else. A hardware
+player sorts by **tags**, not filenames — so everything lands under *Unknown
+Artist* with a letterboxed video thumbnail for a cover.
+
+| | Typical downloader | This one |
+|---|---|---|
+| **Filename** | `Artist - Song (Official Music Video) [4K] ｜ Label.mp3` | `Artist/Album/04 - Song.mp3` |
+| **Artist** | — | `Artist Name` |
+| **Album** | — | `Album Name` |
+| **Track no.** | — | `4/12` |
+| **Year / genre** | — | `2024` · `Alternative` |
+| **Cover art** | video thumbnail, or none | 500×500 baseline JPEG |
+
+---
+
+## Why it works on a Walkman when other tools don't
+
+Every one of these exists because a Walkman E-series refused to display
+something:
+
+- **ID3v2.3 tags, not v2.4** — plus an ID3v1 tail. These players only partly
+  understand v2.4.
+- **Baseline JPEG cover art.** Progressive JPEGs render blank on Walkman
+  firmware. Art is always re-encoded baseline, square, 500 px.
+- **Latin-1 text with a UTF-16 fallback.** UTF-8 ID3 frames show as garbage.
+- **Only legal MPEG-1 Layer III bitrates.** Ask libmp3lame for 288 kbps and it
+  silently gives you 256 — so the ladder is 320/256/224/192/160/128.
+- **FAT32-safe filenames**, shallow `Artist/Album/` folders, 44.1 kHz stereo CBR.
+
+## Clean titles, automatically
+
+`Official Music Video`, `4K`, `2023 Remaster`, `Lyrical`, genre tags, label
+names and `#hashtags` are stripped — while real parenthetical titles like
+*Breathe (In the Air)* survive.
+
+## Size caps that respect your storage
+
+320 kbps costs **2.4 MB per minute**, so "always 320" and an 8 MB cap cannot
+both hold past ~3:20. Set a per-file cap and each track gets the highest legal
+bitrate that fits:
+
+| Song length | 7 MB cap | 10 MB cap (default) |
+|---|---|---|
+| 3:00 | 256 | **320** |
+| 4:00 | 224 | **320** |
+| 4:30 | 192 | 256 |
+| 6:00 | 128 | 224 |
+
+---
+
+## Supported links
+
+**Audio downloaded directly** — these sites serve audio openly:
+
+`YouTube` · `YouTube Music` · `SoundCloud` · `Bandcamp` · `Mixcloud` ·
+`Audiomack` — plus everything else [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+supports.
+
+**Tracklist only** — `Spotify` · `Apple Music`
+
+Their audio is DRM-protected and **this tool never touches it**. Only the public
+tracklist is read — song names, artists, durations — and each song is then
+located on one of the open sites above. You get correct tags; their streams stay
+untouched. No account, no API key, no DRM circumvention.
+
+Tidal, Deezer and Amazon Music publish no keyless public tracklist, so they are
+reported as unsupported rather than guessed at.
+
+---
 
 ## Install
 
-Needs Python 3.10+ and **ffmpeg** (`brew install ffmpeg` on macOS).
+Needs **Python 3.10+** and **ffmpeg**.
 
 ```bash
-git clone https://github.com/<you>/walkman-dl.git
-cd walkman-dl
+git clone https://github.com/reddotconsultancy/walkman-music-downloader.git
+cd walkman-music-downloader
 ./setup.sh
 ```
 
-## Run it
+ffmpeg: `brew install ffmpeg` (macOS) · `sudo apt install ffmpeg` (Debian/Ubuntu)
+
+## Use it
 
 ```bash
 ./run.sh
 ```
 
-Opens <http://127.0.0.1:7788>. Paste the playlist URL, press **Download playlist**.
+Opens at `http://127.0.0.1:7788`. Paste a link, press Download.
 
-Command line, same engine:
+Same engine from the command line:
 
 ```bash
-.venv/bin/python cli.py "https://music.youtube.com/playlist?list=OLAK5uy_XXXX" -o ~/Music/walkman
+.venv/bin/python cli.py "https://music.youtube.com/playlist?list=OLAK5uy_..." --max-mb 10
 ```
 
-Any of these work as the link: a `music.youtube.com` album or playlist URL, a
-`www.youtube.com` one, a single video, or a bare list id pasted on its own
-(`OLAK5uy_...`, `PL...`).
+| Flag | What it does |
+|---|---|
+| `--max-mb 8` | Per-file size cap (default 10) |
+| `--bitrate 320` | Target bitrate before the cap applies |
+| `--country IN` | Metadata region — use `IN` for Bollywood/Punjabi releases |
+| `--items 4,5` | Only these album positions, keeping real track numbers |
+| `--album-mode always` | Treat any playlist as one release |
+| `--flat` | No `Artist/Album` subfolders |
+| `--cookies-from-browser chrome` | For age-restricted or region-locked items |
+| `--report out.csv` | Write a CSV of everything fetched |
 
-## Album mode
+---
 
-A YouTube Music album link (`list=OLAK5uy_...`) is detected automatically. The
-whole release is looked up **once** on iTunes, and every track then shares the
-same album name, release year, cover art and **real track numbers**, in album
-order:
+## Where the metadata comes from
 
-```
-2 item(s) found in "The Car"
-album mode: looking up "The Car" by Arctic Monkeys
-  matched: Arctic Monkeys - The Car (2022, 10 tracks, score 0.9)
-[1] done: 01 - There'd Better Be A Mirrorball.mp3  256kbps  8.28 MB  art=yes
-```
+Three free, keyless sources, in order:
 
-That beats looking each song up on its own, which tends to resolve singles and
-compilations instead and leaves a folder of mismatched albums.
+1. **[iTunes Search API](https://performance-partners.apple.com/search-api)** — primary catalogue.
+2. **[MusicBrainz](https://musicbrainz.org/)** — fallback. Covers releases iTunes is
+   missing entirely (*The Dark Side of the Moon* is absent from iTunes' album
+   search in every storefront tested).
+3. **[Cover Art Archive](https://coverartarchive.org/)** — art for MusicBrainz releases.
 
-Mode is `auto` by default. `--album-mode always` forces it for any playlist
-(useful when someone has uploaded an album as a normal playlist);
-`--album-mode never` tags song by song. Same control sits under **More
-options** in the UI.
+**Album mode** resolves the whole release in one lookup instead of searching each
+song separately — that is what keeps an album in one folder with correct track
+numbers, rather than scattering it across a cover band's single, a live EP and a
+greatest-hits compilation.
 
-If no iTunes release matches, it falls back to the YouTube album title with
-playlist order as the track numbers.
+Set the metadata region to match the music: `IN` finds Malayalam, Hindi and
+Punjabi releases the US storefront does not carry.
 
-Useful flags: `--album-mode always`, `--max-mb 8`, `--bitrate 320`, `--country IN`, `--flat`,
-`--limit 5`, `--overwrite`, `--report out.csv`,
-`--cookies-from-browser chrome` (for age-restricted or region-locked videos).
-
-## About 320 kbps and the 8 MB cap
-
-They collide. 320 kbps CBR is **2.4 MB per minute**, so 8 MB buys 3 minutes 20
-seconds of music — nothing longer fits.
-
-So each track gets the highest bitrate that still fits the cap:
-
-| Song length | 7 MB cap | 8 MB cap | 10 MB cap |
-|---|---|---|---|
-| 3:00 | 256 | **320** | **320** |
-| 3:30 | 256 | 256 | **320** |
-| 4:00 | 224 | 256 | **320** |
-| 4:30 | 192 | 224 | 256 |
-| 5:00 | 160 | 192 | 256 |
-| 6:00 | 128 | 160 | 224 |
-
-The ladder only uses legal MPEG-1 Layer III rates (320/256/224/192/160/128/112/96).
-Ask libmp3lame for 288k and it quietly gives you 256k instead.
-
-**The default cap is 10 MB.** Almost every song up to 4 minutes then stays at
-320 kbps, and a 16 GB Walkman still holds roughly 1,600 of them. Drop to 8 MB
-and most songs land at 256 kbps - transparent on earbuds, but not the 320 you
-asked for. The UI and `--max-mb` switch it per run.
-
-## What each file gets
-
-- **MP3, CBR, 44.1 kHz, stereo** — the format the E-series indexes most reliably.
-- **ID3v2.3 tags** plus an ID3v1 tail. (v2.4 is only partly understood by these
-  players, so it is not used.) Title, artist, album, album artist, track no.,
-  disc no., year, genre.
-- **Cover art**: 500×500 **baseline** JPEG in an APIC front-cover frame.
-  Progressive JPEGs do not render on Walkman firmware, so art is always
-  re-encoded baseline.
-- **Text encoding**: Latin-1 where it fits, UTF-16 otherwise. UTF-8 ID3 frames
-  show as garbage on these players, so they are never written.
-- **FAT32-safe filenames**, `Artist/Album/01 - Title.mp3`, max 60 chars per part.
-
-## Where tags come from
-
-yt-dlp's own metadata is thin, so titles are cleaned ("Official Video", genre
-tags, "NCS - Copyright Free Music", `#hashtags`) and matched against the free
-**iTunes Search API**. Both title orders are tried — `Artist - Song` and
-`Song - Movie/Album`, which is how a lot of Indian film music is titled — and
-duration is used to break ties. Karaoke, tribute, acoustic, remix and
-"Punjabi Version" style re-recordings are penalised so the original wins.
-
-Set **Metadata region** to match the music: `IN` finds Bollywood and Punjabi
-releases that the US storefront does not carry.
-
-No confident match → it falls back to the cleaned YouTube title and crops the
-video thumbnail to a square for the cover. The UI marks those rows `from YT`.
+---
 
 ## Copying to the Walkman
 
-Plug it in, then drag the artist folders into the player's `MUSIC` folder:
-
 ```bash
-cp -R downloads/* /Volumes/WALKMAN/MUSIC/
+cp -R ~/Desktop/Walkman\ Music/* /Volumes/WALKMAN/MUSIC/
 ```
 
-Eject properly — the player rebuilds its database on disconnect, which is when
-tags and cover art get picked up.
+Eject properly — the player rebuilds its database on disconnect, and that is
+when tags and cover art get picked up.
 
-## Notes
+---
 
-- Private, deleted and region-blocked entries are skipped; the run continues.
-- A 403 on a stream is retried against four other YouTube player clients before
-  the track is given up on. If a whole playlist 403s, use
-  `--cookies-from-browser chrome`.
-- Existing files are skipped unless you pass `--overwrite`, so re-running a
-  playlist only fetches what is new.
-- One job at a time.
+## FAQ
 
-## Scope
+**Does this work on Walkman NW-E393 / E394 / E395?**
+Yes — the E-series is what it was built and tested against. It also suits any
+FAT32 player that reads ID3 tags: older iPods, Sansa Clip, generic DAPs.
 
-A personal tool for getting music onto a hardware MP3 player that only reads
-local files. It downloads nothing by itself - you give it a link, it fetches
-that link with [yt-dlp](https://github.com/yt-dlp/yt-dlp), transcodes with
-ffmpeg and writes tags with mutagen.
+**Why are my files not 320 kbps?**
+Because they wouldn't fit your size cap. 320 kbps is 2.4 MB per minute. Raise
+the cap or accept the step-down — 256 kbps is transparent on earbuds.
 
-Check what your local law allows and what the source site's terms permit
-before using it, and don't redistribute what you download.
+**Why is the album art blank on my player?**
+If art came from elsewhere, it is probably a progressive JPEG. Re-download with
+this tool; it always re-encodes baseline.
 
-Metadata comes from the free [iTunes Search API](https://performance-partners.apple.com/search-api)
-and [MusicBrainz](https://musicbrainz.org/), with cover art from
-[Cover Art Archive](https://coverartarchive.org/). No API keys needed.
+**Can I host this as a website for other people?**
+Not practically. It needs ffmpeg, long-running jobs and a writable disk, so
+GitHub Pages and most serverless hosts are out — and YouTube blocks datacenter
+IP ranges, so a cloud-hosted copy gets bot-checked almost immediately. It is
+designed to run on your own machine.
+
+**Does it need a Spotify or Apple Music API key?**
+No. Nothing here needs an account or a key.
+
+---
+
+## Legal
+
+A personal tool for getting music onto a hardware player that only reads local
+files. It downloads nothing on its own — you give it a link, it fetches that
+link with yt-dlp, transcodes with ffmpeg and writes tags with mutagen. It does
+not break DRM and does not access protected streams.
+
+Check what your local law allows and what each site's terms permit before using
+it, and don't redistribute what you download.
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

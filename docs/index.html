@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walkman Music Downloader — clean MP3 tags and album art for Sony Walkman</title>
+<meta name="description" content="Turn a YouTube, YouTube Music, SoundCloud, Spotify or Apple Music link into MP3s with correct artist, album and track tags, plus album art sized for Sony Walkman screens. Free and open source.">
+<link rel="canonical" href="https://reddotconsultancy.github.io/walkman-music-downloader/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Walkman Music Downloader">
+<meta property="og:description" content="MP3s with correct tags and Walkman-ready album art. Free and open source.">
+<meta property="og:url" content="https://reddotconsultancy.github.io/walkman-music-downloader/">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root{
+    --text:#1d1d1f; --dim:#86868b; --line:#d2d2d7; --wash:#f5f5f7;
+    --accent:#0071e3; --ok:#1d8b45; --err:#c9252d;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+  body{margin:0;background:#fff;color:var(--text);letter-spacing:-.01em;
+    font:17px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px}
+  header{padding:110px 0 76px;text-align:center}
+  h1{font-size:clamp(38px,6.4vw,62px);line-height:1.05;margin:0 0 20px;
+    font-weight:600;letter-spacing:-.03em}
+  .lede{font-size:clamp(18px,2.4vw,23px);color:var(--dim);margin:0 auto 34px;max-width:600px}
+  .cta{display:inline-flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+    padding:13px 28px;border-radius:980px;font-size:16px;font-weight:500;transition:background .15s}
+  .btn:hover{background:#0077ed}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+  .btn.ghost:hover{background:var(--wash)}
+  section{padding:68px 0;border-top:1px solid var(--line)}
+  h2{font-size:clamp(26px,3.4vw,36px);font-weight:600;letter-spacing:-.025em;
+    margin:0 0 12px;text-align:center}
+  .sectsub{color:var(--dim);text-align:center;margin:0 auto 44px;max-width:560px}
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .box{border:1px solid var(--line);border-radius:18px;padding:22px;background:#fff}
+  .box.bad{background:var(--wash)}
+  .tag{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+    margin-bottom:14px;display:block}
+  .bad .tag{color:var(--err)} .good .tag{color:var(--ok)}
+  .fname{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+    word-break:break-word;margin-bottom:16px;color:var(--text)}
+  dl{margin:0;font-size:14px}
+  dl div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;
+    border-bottom:1px solid #ededf0}
+  dl div:last-child{border-bottom:0}
+  dt{color:var(--dim)} dd{margin:0;text-align:right;font-weight:500}
+  dd.none{color:var(--err);font-weight:400}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:34px 30px}
+  .feat h3{font-size:17px;margin:0 0 7px;font-weight:600}
+  .feat p{margin:0;color:var(--dim);font-size:15px}
+  pre{background:var(--wash);border:1px solid var(--line);border-radius:14px;
+    padding:18px 20px;overflow-x:auto;
+    font:13.5px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 14px}
+  .pills{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:8px}
+  .pill{border:1px solid var(--line);border-radius:980px;padding:7px 15px;
+    font-size:14px;color:var(--dim)}
+  .pill b{color:var(--text);font-weight:500}
+  .note{background:var(--wash);border-radius:16px;padding:22px 24px;
+    font-size:15px;color:var(--dim);margin-top:34px}
+  .note b{color:var(--text)}
+  footer{padding:50px 0 70px;text-align:center;color:var(--dim);font-size:14px;
+    border-top:1px solid var(--line)}
+  footer a{color:var(--accent);text-decoration:none}
+  @media (max-width:640px){ header{padding:70px 0 54px} .ba{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <h1>Music that looks right<br>on your Walkman.</h1>
+  <p class="lede">Paste a link. Get MP3s with the correct artist, album and track
+     number &mdash; and album art sized for the screen.</p>
+  <div class="cta">
+    <a class="btn" href="https://github.com/reddotconsultancy/walkman-music-downloader">Get it on GitHub</a>
+    <a class="btn ghost" href="#how">How it works</a>
+  </div>
+</header>
+
+<section class="wrap">
+  <h2>The problem is the tags.</h2>
+  <p class="sectsub">Most downloaders hand you the video title and nothing else.
+     A hardware player sorts by tags, so the file lands under Unknown Artist.</p>
+  <div class="ba">
+    <div class="box bad">
+      <span class="tag">Typical downloader</span>
+      <div class="fname">Artist Name - Song Title (Official Music Video) [4K Remaster] ｜ Label.mp3</div>
+      <dl>
+        <div><dt>Artist</dt><dd class="none">&mdash;</dd></div>
+        <div><dt>Album</dt><dd class="none">&mdash;</dd></div>
+        <div><dt>Track</dt><dd class="none">&mdash;</dd></div>
+        <div><dt>Year</dt><dd class="none">&mdash;</dd></div>
+        <div><dt>Artwork</dt><dd class="none">video thumbnail</dd></div>
+      </dl>
+    </div>
+    <div class="box good">
+      <span class="tag">This one</span>
+      <div class="fname">Artist Name/Album Name/04 - Song Title.mp3</div>
+      <dl>
+        <div><dt>Artist</dt><dd>Artist Name</dd></div>
+        <div><dt>Album</dt><dd>Album Name</dd></div>
+        <div><dt>Track</dt><dd>4 of 12</dd></div>
+        <div><dt>Year</dt><dd>2024</dd></div>
+        <div><dt>Artwork</dt><dd>500&times;500 baseline JPEG</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<section class="wrap" id="how">
+  <h2>Built for the hardware.</h2>
+  <p class="sectsub">Every detail here exists because a Walkman E-series
+     refused to display something.</p>
+  <div class="grid">
+    <div class="feat">
+      <h3>Clean song titles</h3>
+      <p>Strips <em>Official Music Video</em>, <em>4K</em>, <em>2023 Remaster</em>,
+         genre tags and hashtags &mdash; while keeping real titles like
+         <em>Breathe (In the Air)</em> intact.</p>
+    </div>
+    <div class="feat">
+      <h3>Album art that renders</h3>
+      <p>500&times;500 square, re-encoded as <b>baseline</b> JPEG. Progressive
+         JPEGs show up blank on Walkman firmware.</p>
+    </div>
+    <div class="feat">
+      <h3>ID3v2.3, not v2.4</h3>
+      <p>With an ID3v1 tail. Latin-1 text, UTF-16 where needed &mdash; UTF-8
+         frames render as garbage on these players.</p>
+    </div>
+    <div class="feat">
+      <h3>Real track numbers</h3>
+      <p>Album links resolve the whole release in one lookup, so every song
+         shares one album name, year, cover and correct order.</p>
+    </div>
+    <div class="feat">
+      <h3>Fits your size cap</h3>
+      <p>320&nbsp;kbps costs 2.4&nbsp;MB a minute. Pick a per-file cap and each
+         track gets the highest legal bitrate that fits under it.</p>
+    </div>
+    <div class="feat">
+      <h3>Foldered for the device</h3>
+      <p><code>Artist/Album/01 - Title.mp3</code>, FAT32-safe names, shallow
+         paths. Drag the folders straight into MUSIC.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>Paste anything.</h2>
+  <p class="sectsub">Audio is fetched only from sites that serve it openly.</p>
+  <div class="pills">
+    <span class="pill"><b>YouTube</b></span>
+    <span class="pill"><b>YouTube&nbsp;Music</b></span>
+    <span class="pill"><b>SoundCloud</b></span>
+    <span class="pill"><b>Bandcamp</b></span>
+    <span class="pill"><b>Mixcloud</b></span>
+    <span class="pill"><b>Audiomack</b></span>
+  </div>
+  <div class="note">
+    <b>Spotify and Apple Music links work differently.</b> Their audio is
+    DRM-protected and this tool never touches it. Only the public tracklist is
+    read &mdash; song names, artists, durations &mdash; and each song is then
+    located on one of the open sites above. You get the right tags; their
+    streams stay untouched.
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>Install.</h2>
+  <p class="sectsub">Runs on your own machine. Needs Python 3.10+ and ffmpeg.</p>
+<pre>git clone https://github.com/reddotconsultancy/walkman-music-downloader.git
+cd walkman-music-downloader
+./setup.sh</pre>
+<pre>./run.sh</pre>
+  <p class="sectsub" style="margin:0">Opens at localhost:7788. There is a CLI too.</p>
+</section>
+
+<footer class="wrap">
+  MIT licensed &middot;
+  <a href="https://github.com/reddotconsultancy/walkman-music-downloader">Source on GitHub</a><br>
+  <span style="font-size:13px">Check what your local law and each site's terms allow before downloading.</span>
+</footer>
+
+</body>
+</html>

@@ -516,7 +516,7 @@ def lookup_album(album_title: str, album_artist: str = "",
 def match_in_album(am: AlbumMeta, raw_title: str, duration: Optional[float],
                    position: int) -> Optional[TrackMeta]:
     """Pick the album track a given YouTube video corresponds to."""
-    if not am.tracks or am.source not in ("itunes", "musicbrainz"):
+    if not am.tracks or am.source == "youtube":
         return None
 
     cands = _candidates(raw_title, "", "", "")

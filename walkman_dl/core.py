@@ -27,9 +27,10 @@ from typing import Callable, Iterable, Optional
 import requests
 from PIL import Image
 
-from .meta import (AlbumMeta, TrackMeta, clean_title, guess_album_artist,
-                   lookup, lookup_album, match_in_album,
-                   split_artist_title)
+from .meta import (AlbumMeta, TrackMeta, _soft_ratio, clean_title,
+                   guess_album_artist, lookup, lookup_album,
+                   match_in_album, split_artist_title)
+from .sources import SourceError, SourceJob, resolve
 
 # Bitrate ladder, highest first. Only legal MPEG-1 Layer III rates appear
 # here - ask libmp3lame for 288k and it silently gives you 256k instead.
@@ -375,6 +376,146 @@ def probe_duration(path: Path) -> float:
         return 0.0
 
 
+# ------------------------------------------------- find a known song on YT
+
+# Uploads that are not the studio recording someone asked for.
+_WRONG_CUT = re.compile(
+    r"\b(live|cover|remix|reaction|review|karaoke|instrumental|sped\s*up|"
+    r"slowed|nightcore|8d|loop(ed)?|mashup|tutorial|behind\s*the)\b", re.I)
+
+
+def find_on_youtube(artist: str, title: str, duration: float, opts: Options,
+                    log: Logger = _log_noop) -> Optional[dict]:
+    """Search YouTube for one known song and return the closest upload.
+
+    Duration is the strongest signal: a studio recording that matches the
+    release length to within a few seconds is almost always the right one.
+    """
+    import yt_dlp
+
+    query = f"{artist} {title}".strip()
+    ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True,
+                "skip_download": True}
+    if opts.cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (opts.cookies_from_browser,)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            res = ydl.extract_info(f"ytsearch6:{query}", download=False)
+    except Exception as exc:
+        log(f"      search failed: {str(exc)[:90]}")
+        return None
+
+    best, best_score = None, 0.0
+    for en in (res or {}).get("entries") or []:
+        if not en:
+            continue
+        cand = clean_title(en.get("title") or "")
+        _, song = split_artist_title(cand)
+        s = max(_soft_ratio(title, song), _soft_ratio(title, cand))
+        if artist:
+            up = f"{en.get('uploader') or ''} {en.get('title') or ''}"
+            if _soft_ratio(artist, en.get("uploader") or "") > 0.6 or \
+                    artist.lower() in up.lower():
+                s += 0.15
+        d = en.get("duration") or 0
+        if duration and d:
+            delta = abs(duration - d)
+            if delta <= 3:
+                s += 0.30
+            elif delta <= 10:
+                s += 0.15
+            elif delta > 30:
+                s -= 0.50          # a different cut of the song
+        if _WRONG_CUT.search(en.get("title") or "") and \
+                not _WRONG_CUT.search(title):
+            s -= 0.35
+        if (en.get("uploader") or "").endswith("- Topic"):
+            s += 0.10             # auto-generated official audio
+        if s > best_score:
+            best_score, best = s, en
+
+    if not best or best_score < 0.55:
+        return None
+    return best
+
+
+def run_tracklist(job: SourceJob, opts: Options, log: Logger,
+                  on_result: Optional[Callable[[Result], None]] = None
+                  ) -> list[Result]:
+    """Fetch every song on a tracklist read from a streaming service.
+
+    The streaming service supplies only names, artists and durations. Each
+    song is then located on a site whose audio yt-dlp can legally read, and
+    the tags come from the tracklist - so the files are named and foldered
+    correctly even though the audio came from elsewhere.
+    """
+    album = AlbumMeta(
+        album=job.name if job.is_album else "",
+        album_artist=job.artist,
+        year=job.year,
+        genre=next((t.get("genre") for t in job.tracks if t.get("genre")), ""),
+        art_url=job.art_url,
+        track_total=len(job.tracks),
+        disc_total=max([t.get("disc_no") or 1 for t in job.tracks] or [1]),
+        tracks=job.tracks,
+        source=job.platform.lower().replace(" ", ""),
+    )
+    # Spotify's public payload carries no release year or genre, so those are
+    # filled in from the keyless catalogue APIs without disturbing the
+    # tracklist or cover art the source already gave us.
+    if job.is_album and job.name and (not album.year or not album.genre):
+        enrich = lookup_album(job.name, job.artist,
+                              [t["title"] for t in job.tracks],
+                              country=opts.country)
+        if enrich.source in ("itunes", "musicbrainz"):
+            album.year = album.year or enrich.year
+            album.genre = album.genre or enrich.genre
+            album.art_url = album.art_url or enrich.art_url
+
+    log(f'{job.platform}: "{job.name}"'
+        + (f" by {job.artist}" if job.artist else "")
+        + f" - {len(job.tracks)} track(s)")
+    log("reading the tracklist only; this tool never touches "
+        f"{job.platform} audio")
+
+    results: list[Result] = []
+    used_paths: set = set()
+    selected = parse_items(opts.items, len(job.tracks))
+    todo = [t for i, t in enumerate(job.tracks, 1)
+            if not selected or i in selected]
+    if opts.limit:
+        todo = todo[: opts.limit]
+
+    for n, t in enumerate(todo, 1):
+        idx = t.get("track_no") or n
+        label = f"{t['artist']} - {t['title']}"
+        log(f"[{idx}] looking for: {label}")
+        hit = find_on_youtube(t["artist"], t["title"], t.get("duration") or 0,
+                              opts, log)
+        if not hit:
+            r = Result(index=idx, video_id="", url="", status="error",
+                       title=t["title"], artist=t["artist"],
+                       album=album.album,
+                       message="no close enough match found on YouTube")
+            log(f"[{idx}] NOT FOUND: {label}")
+            results.append(r)
+            if on_result:
+                on_result(r)
+            continue
+
+        entry = {
+            "id": hit.get("id"),
+            "url": hit.get("url") or f"https://www.youtube.com/watch?v={hit.get('id')}",
+            "title": f"{t['artist']} - {t['title']}",
+            "duration": hit.get("duration"),
+        }
+        r = process_one(entry, idx, opts, log, album, len(job.tracks), used_paths)
+        results.append(r)
+        if on_result:
+            on_result(r)
+    return results
+
+
 # ---------------------------------------------------------------- one track
 
 def process_one(entry: dict, index: int, opts: Options,
@@ -522,7 +663,17 @@ def run_playlist(url: str, opts: Options, log: Logger = _log_noop,
                  on_result: Optional[Callable[[Result], None]] = None) -> list[Result]:
     opts.out_dir = Path(opts.out_dir)
     opts.out_dir.mkdir(parents=True, exist_ok=True)
-    url = normalise_url(url)
+
+    # Streaming services that only expose a tracklist take a different route.
+    job = resolve(url, opts.country)
+    if job.kind == "tracklist":
+        results = run_tracklist(job, opts, log, on_result)
+        ok = [r for r in results if r.status == "ok"]
+        log(f"finished: {len(ok)} ok, "
+            f"{sum(1 for r in results if r.status=='error')} failed")
+        return results
+
+    url = normalise_url(job.url or url)
     log("reading link...")
     info, entries = playlist_entries(url, opts, log)
     container = info.get("title") or ""
